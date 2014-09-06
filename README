@@ -8,6 +8,7 @@ SYNOPSIS
        package Document {
           use Moose;
           use MooseX::InlineTypes;
+      
           has heading => (
              traits  => [ InlineTypes ],
              is      => "ro",
@@ -18,18 +19,18 @@ SYNOPSIS
 
 DESCRIPTION
     This module provides an attribute trait that allows you to declare Moose
-    type constraints and coercions inline using coderefs, a bit like Moo,
-    but not quite.
+    type constraints and coercions inline using coderefs, a bit like Moo, but
+    not quite.
 
-  "isa => CODEREF"
+  `isa => CODEREF`
     This is a coderef which returns true if the value passes the type
     constraint and false otherwise.
 
-  "coerce => CODEREF"
-    This is a coderef which takes the uncoerced value and returns the
-    coerced value.
+  `coerce => CODEREF`
+    This is a coderef which takes the uncoerced value and returns the coerced
+    value.
 
-  "coerce => ARRAYREF"
+  `coerce => ARRAYREF`
     This allows you to specify several different coercions from different
     types:
 
@@ -41,23 +42,23 @@ DESCRIPTION
        ],
 
     The order of coercions is significant. For example, given the following
-    the "Int" coercion is never attempted, because "Any" is tried first!
+    the `Int` coercion is never attempted, because `Any` is tried first!
 
        coerce => [
           Any     => sub { ... },
           Int     => sub { ... },
        ],
 
-    Note that "coerce => CODEREF" is really just a shorthand for "coerce =>
-    [ Item => CODEREF ]".
+    Note that `coerce => CODEREF` is really just a shorthand for `coerce => [
+    Item => CODEREF ]`.
 
     Attributes declared with the MooseX::InlineTypes trait do still support
-    the "normal" Moose "isa" and "coerce" options, though it should be noted
-    that "isa=>CODE, coerce=>1" makes no sense and Moose will give you a
+    the "normal" Moose `isa` and `coerce` options, though it should be noted
+    that `isa=>CODE, coerce=>1` makes no sense and Moose will give you a
     massive warning!
 
 EXPORT
-    "InlineTypes"
+    `InlineTypes`
         This is an exported constant so that you can write:
 
            traits  => [ InlineTypes ],
@@ -66,14 +67,14 @@ EXPORT
 
            traits  => [ "MooseX::InlineTypes::Trait::Attribute" ],
 
-    "-global"
+    `-global`
         If you do this:
 
            use MooseX::InlineTypes -global;
 
-        Then the InlineTypes trait will be applied automatically to *all*
-        your attributes. (Actually only to those attributes declared using
-        "has". Attributes added via Moose meta calls will be unaffected.)
+        Then the InlineTypes trait will be applied automatically to *all* your
+        attributes. (Actually only to those attributes declared using `has`.
+        Attributes added via Moose meta calls will be unaffected.)
 
         Don't worry; it's not really global. It's just for the caller.
 
@@ -102,11 +103,10 @@ SEE ALSO
           );
        }
 
-    Note that MooseX::Types exports "is_X" functions for each type which can
-    be useful inside the "isa" coderefs.
+    Note that MooseX::Types exports `is_X` functions for each type which can
+    be useful inside the `isa` coderefs.
 
-    With coercion arrayrefs, beware the magic quoting power of the fat
-    comma!
+    With coercion arrayrefs, beware the magic quoting power of the fat comma!
 
 HISTORY
     This was originally a patch for MooseX::AttributeShortcuts until Matt S
@@ -116,10 +116,10 @@ AUTHOR
     Toby Inkster <tobyink@cpan.org>.
 
 COPYRIGHT AND LICENCE
-    This software is copyright (c) 2012-2013 by Toby Inkster.
+    This software is copyright (c) 2012-2014 by Toby Inkster.
 
-    This is free software; you can redistribute it and/or modify it under
-    the same terms as the Perl 5 programming language system itself.
+    This is free software; you can redistribute it and/or modify it under the
+    same terms as the Perl 5 programming language system itself.
 
 DISCLAIMER OF WARRANTIES
     THIS PACKAGE IS PROVIDED "AS IS" AND WITHOUT ANY EXPRESS OR IMPLIED

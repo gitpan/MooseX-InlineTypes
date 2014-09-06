@@ -1,34 +1,15 @@
-package MooseX::InlineTypes;
-
 use 5.008;
 use strict;
 use warnings;
 
+package MooseX::InlineTypes;
+
 our $AUTHORITY = 'cpan:TOBYINK';
-our $VERSION   = '0.002';
+our $VERSION   = '0.003';
 
-use Moose::Util::TypeConstraints ();
-use Sub::Exporter ();
-use Sub::Install qw( install_sub );
-
-my $EXPORT;
-sub import
-{
-	$EXPORT ||= Sub::Exporter::build_exporter {
-		exports => [qw/ InlineTypes /],
-		groups  => {
-			default => [qw/ InlineTypes /],
-		},
-	};
-	
-	if (grep { !ref and /^-global$/ } @_)
-	{
-		@_ = grep { ref or !/^-global$/ } @_;
-		$_[0]->_alter_has(scalar caller);
-	}
-	
-	goto $EXPORT;
-}
+use Exporter::Tiny;
+our @ISA    = qw( Exporter::Tiny );
+our @EXPORT = qw( InlineTypes );
 
 # Some mini helper subs
 # 
@@ -40,16 +21,20 @@ use constant do
 	package MooseX::InlineTypes::Trait::Attribute;
 	
 	use Moose::Role;
-	use Scalar::Does -constants;
+	use MooseX::ErsatzMethod;
+	
+	use Type::Tiny 0.021;  # 0.021_03 to be exact
+	use Types::Standard qw( CodeRef ArrayRef Item );
+	use Types::TypeTiny qw( CodeLike ArrayLike HashLike );
 	
 	has isa_code => (
 		is     => 'ro',
-		isa    => 'CodeRef',
+		isa    => CodeRef,
 	);
 	
 	has coerce_array => (
 		is     => 'ro',
-		isa    => 'ArrayRef',
+		isa    => ArrayRef,
 	);
 	
 	before _process_options => sub
@@ -57,7 +42,7 @@ use constant do
 		my $meta = shift;
 		my ($name, $options) = @_;
 		
-		if (does $options->{isa}, CODE)
+		if (CodeLike->check( $options->{isa} ))
 		{
 			$meta->_process_isa_code(@_);
 			$meta->_make_isa(@_);
@@ -68,6 +53,28 @@ use constant do
 			$meta->_process_coerce_array(@_);
 			$meta->_make_coerce(@_);
 		}
+	};
+	
+	# OK, this is insane, but unfortunately necessary!
+	# Moose native attribute has this _check_type method
+	# which checks:
+	#
+	# $options->{isa}->is_a_type_of($meta->_helper_type)
+	# 
+	# However, $meta->_helper_type returns a stringy type
+	# constraint. If $options->{isa} is a Type::Tiny object,
+	# it will return false for is_a_type_of($stringy).
+	# 
+	# So here we promote _helper_type to a type constraint
+	# object. But we also need to ensure that there is a
+	# _helper_type method at all, because otherwise `around`
+	# will fail at role composition time!
+	#
+	ersatz _helper_type => sub { +() };
+	around _helper_type => sub
+	{
+		my $type = shift->(@_);
+		ref($type) ? $type : defined($type) ? $FTC->($type) : ();
 	};
 	
 	sub _process_isa_code
@@ -88,10 +95,10 @@ use constant do
 			$name = $options->{definition_context}{package} . "::$name";
 		}
 		
-		$options->{isa} = "Moose::Meta::TypeConstraint"->new(
-			name       => "__INLINE__[$name]",
-			parent     => $FTC->("Item"),
-			constraint => $WRAP->( $options->{isa_code} ),
+		$options->{isa} = 'Type::Tiny'->new(
+			display_name => "__INLINE__[$name]",
+			parent       => Item,
+			constraint   => $options->{isa_code},
 		);
 	}
 	
@@ -103,24 +110,24 @@ use constant do
 		my $c = delete $options->{coerce};
 		
 		my @map;
-		if (does $c, ARRAY)
+		if (ArrayLike->check($c))
 		{
 			my $idx;
-			@map = map { ($idx++%2) ? $WRAP->($_) : $_ } @$c;
+			@map = map { ($idx++%2) ? $_ : $FTC->($_) } @$c;
 		}
-		elsif (0 and does $c, HASH)  # commented out!
+		elsif (0 and HashLike->check($c))  # commented out!
 		{
 			# sort is a fairly arbitrary order, but at least it's
 			# consistent. We prefer an ARRAY!
 			# 
 			for my $k (sort keys %$c)
 			{
-				push @map, $k => $WRAP->( $c->{$k} );
+				push @map, $FTC->($k) => $c->{$k};
 			}
 		}
-		elsif (does $c, CODE)
+		elsif (CodeLike->check($c))
 		{
-			@map = (Item => $WRAP->($c));
+			@map = (Item, $c);
 		}
 		else
 		{
@@ -146,44 +153,46 @@ use constant do
 		# 
 		if (not $options->{isa_code})
 		{
-			my $orig = $FTC->($options->{isa} || 'Item');
-			$options->{isa} = Moose::Meta::TypeConstraint->new(
-				name   => "__INLINE__[$name]",
-				parent => $orig,
+			my $orig = $options->{isa} ? $FTC->($options->{isa}) : Item;
+			$options->{isa} = 'Type::Tiny'->new(
+				display_name => "__INLINE__[$name]",
+				parent       => $orig,
 			);
 		}
 		
-		my $coercions = "Moose::Meta::TypeCoercion"->new(
-			type_constraint => $options->{isa},
-		);
-		$coercions->add_type_coercions(@{$options->{coerce_array}});
-		$options->{isa}->coercion($coercions);
+		$options->{isa}->coercion->add_type_coercions( @{$options->{coerce_array}} );
 		$options->{coerce} = 1;
 	}
 	
 	InlineTypes => __PACKAGE__;
 };
 
+sub _exporter_validate_opts
+{
+	my $class = shift;
+	my ($opts) = @_;
+	
+	$class->_alter_has($opts) if $opts->{global};
+}
+
 sub _alter_has
 {
-	my ($class, $caller) = @_;
-	my $orig = $caller->can('has')
+	my ($class, $opts) = @_;
+	
+	my $into = $opts->{into};
+	my $next = ref($into) eq q(HASH) ? $into->{has} : $into->can('has')
 		or Carp::croak("Cannot find 'has' function to mess with, stuck");
 	
-	# Prevent warning about "has" being redefined!
-	# 
-	require namespace::clean;
-	namespace::clean->clean_subroutines($caller, 'has');
-	
-	install_sub {
-		into    => $caller,
-		as      => 'has',
-		code    => sub {
+	$class->_exporter_install_sub(
+		'has',
+		+{ -replace => 1 },
+		$opts,
+		sub {
 			my ($name, %args) = @_;
 			push @{ $args{traits} ||= [] }, InlineTypes;
-			@_ = ($name, %args) and goto $orig;
+			@_ = ($name, %args) and goto $next;
 		},
-	};
+	);
 }
 
 1;
@@ -201,6 +210,7 @@ MooseX::InlineTypes - declare type constraints and coercions inline with coderef
    package Document {
       use Moose;
       use MooseX::InlineTypes;
+      
       has heading => (
          traits  => [ InlineTypes ],
          is      => "ro",
@@ -325,7 +335,7 @@ Toby Inkster E<lt>tobyink@cpan.orgE<gt>.
 
 =head1 COPYRIGHT AND LICENCE
 
-This software is copyright (c) 2012-2013 by Toby Inkster.
+This software is copyright (c) 2012-2014 by Toby Inkster.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.

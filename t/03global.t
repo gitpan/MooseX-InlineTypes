@@ -8,7 +8,7 @@ Toby Inkster E<lt>tobyink@cpan.orgE<gt>.
 
 =head1 COPYRIGHT AND LICENCE
 
-This software is copyright (c) 2012-2013 by Toby Inkster.
+This software is copyright (c) 2012-2014 by Toby Inkster.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
@@ -90,7 +90,7 @@ is($o->short_string, 'Foo', 'attribute works');
 
 like(
 	exception { $o->short_string('Foolish') },
-	qr{^Attribute \(short_string\) does not pass the type constraint because: Validation failed for '__INLINE__\[TestClass1::short_string\]' with value "?Foolish"? at accessor TestClass1::short_string},
+	qr{^Attribute \(short_string\) does not pass the type constraint},
 	'value not meeting constraint dies',
 );
 
